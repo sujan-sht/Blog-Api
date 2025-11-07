@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tag;
 use App\Models\Post;
 use App\Http\Requests\PostRequest;
+use Illuminate\Support\Facades\DB;
 use App\Http\Resources\PostResource;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -35,15 +37,27 @@ class PostController extends Controller
     public function store(PostRequest $request)
     {
         $data = $request->validated();
-        $data['user_id'] = auth()->user()->id;
+        try{
+            DB::beginTransaction();
+            $data['user_id'] = auth()->user()->id;
 
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('posts', 'public');
+            if ($request->hasFile('image')) {
+                $data['image'] = $request->file('image')->store('posts', 'public');
+            }
+
+
+            $post = Post::create($data);
+
+            if ($request->filled('tags')) {
+                $post->tags()->sync($request->tags);
+            }
+            DB::commit();
+            return new PostResource($post->load(['user','category','tags']));
+        }catch(\Exception $e){
+            DB::rollBack();
+            throw $e;
         }
 
-        $post = Post::create($data);
-
-        return new PostResource($post->load(['user','category']));
     }
 
     /**
@@ -68,17 +82,27 @@ class PostController extends Controller
     public function update(PostRequest $request, Post $post)
     {
         $data = $request->validated();
-
-        if ($request->hasFile('image')) {
-            if ($post->image) {
-                Storage::disk('public')->delete($post->image);
+        try{
+            DB::beginTransaction();
+            if ($request->hasFile('image')) {
+                if ($post->image) {
+                    Storage::disk('public')->delete($post->image);
+                }
+                $data['image'] = $request->file('image')->store('posts', 'public');
             }
-            $data['image'] = $request->file('image')->store('posts', 'public');
+
+            $post->update($data);
+            if ($request->filled('tags')) {
+                $post->tags()->sync($request->tags);
+            } else {
+                $post->tags()->detach();
+            }
+            DB::commit();
+            return new PostResource($post->load(['user','category','tags']));
+        }catch(\Exception $e){
+            DB::rollBack();
+            throw $e;
         }
-
-        $post->update($data);
-
-        return new PostResource($post->load(['user','category']));
     }
 
     /**
@@ -86,8 +110,9 @@ class PostController extends Controller
      */
     public function destroy(Post $post)
     {
-         $this->authorize('delete', $post);
+        $this->authorize('delete', $post);
 
+        $post->tags()->detach();
         if ($post->image) {
             Storage::disk('public')->delete($post->image);
         }
