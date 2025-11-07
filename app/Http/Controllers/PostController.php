@@ -17,7 +17,8 @@ class PostController extends Controller
      */
     public function index()
     {
-        return PostResource::collection(Post::with(['user','category'])->get());
+        $posts = Post::with(['user','category','tags','comments'])->latest()->paginate(10);
+        return PostResource::collection($posts);
     }
 
     /**

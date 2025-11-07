@@ -18,6 +18,8 @@ class PostResource extends JsonResource
             'id'          => $this->id,
             'user'        => $this->user->only(['id','name','email']),
             'category'    => $this->category->only(['id','name','slug']),
+            'tags'        => TagResource::collection($this->whenLoaded('tags')),
+            'comments'    => CommentResource::collection($this->whenLoaded('comments')),
             'title'       => $this->title,
             'slug'        => $this->slug,
             'excerpt'     => $this->excerpt,
