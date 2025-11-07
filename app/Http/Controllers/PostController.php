@@ -7,6 +7,8 @@ use App\Models\Post;
 use App\Http\Requests\PostRequest;
 use Illuminate\Support\Facades\DB;
 use App\Http\Resources\PostResource;
+use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
@@ -19,7 +21,32 @@ class PostController extends Controller
      */
     public function index()
     {
-        $posts = Post::with(['user','category','tags','comments'])->latest()->paginate(10);
+        $posts = QueryBuilder::for(Post::class)
+            ->with(['user', 'category', 'tags', 'comments'])
+            ->allowedFilters([
+                AllowedFilter::partial('title'),
+
+                AllowedFilter::callback('author', function ($query, $value) {
+                    $query->whereHas('user', function ($q) use ($value) {
+                        $q->where('name', 'like', "%{$value}%");
+                    });
+                }),
+
+                AllowedFilter::callback('category', function ($query, $value) {
+                    $query->whereHas('category', function ($q) use ($value) {
+                        $q->where('name', 'like', "%{$value}%");
+                    });
+                }),
+
+                AllowedFilter::callback('tags', function ($query, $value) {
+                    $query->whereHas('tags', function ($q) use ($value) {
+                        $q->where('name', 'like', "%{$value}%");
+                    });
+                }),
+            ])
+            ->latest()
+            ->paginate(10);
+
         return PostResource::collection($posts);
     }
 
